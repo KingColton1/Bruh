@@ -13,11 +13,23 @@ import asyncio
 import base64
 import logging
 import json
+import importlib
 from datetime import datetime, timezone, timedelta
 from discord.ext import commands
 from discord import app_commands
 import io
-from PIL import Image, ImageDraw, ImageFont
+
+# Pillow is required only by the demotivator command. Load it dynamically so
+# the rest of the bot can start without a static ``PIL`` import diagnostic.
+try:
+    Image = importlib.import_module("PIL.Image")
+    ImageDraw = importlib.import_module("PIL.ImageDraw")
+    ImageFont = importlib.import_module("PIL.ImageFont")
+except ImportError as exc:
+    raise ImportError(
+        "Pillow is required for /demotivator. Install it with "
+        "'python -m pip install Pillow'."
+    ) from exc
 
 # ============================================================
 # CONFIGURATION
@@ -58,9 +70,6 @@ COMMANDS_FOLDER=commands
 # --- Channel IDs ---
 # Channel with notifications about suggested messages
 SUGGESTION_CHANNEL_ID=
-
-# Channel where "X raped Y" messages are sent
-RAPE_CHANNEL_ID=
 
 # Channel where the bot auto-threads messages
 AUTO_THREAD_CHANNEL_ID=
@@ -151,7 +160,6 @@ ENABLE_REPLY_TO_MESSAGE=true
 ENABLE_AUTO_THREAD=false
 ENABLE_CHICKEN_OUT=true
 ENABLE_SUGGESTIONS=true
-ENABLE_RAPE_COMMAND=false
 
 
 
@@ -343,7 +351,7 @@ def load_config() -> dict:
 
     config = {}
     numeric_keys = {
-        "SUGGESTION_CHANNEL_ID", "RAPE_CHANNEL_ID", "AUTO_THREAD_CHANNEL_ID",
+        "SUGGESTION_CHANNEL_ID", "AUTO_THREAD_CHANNEL_ID",
         "CHICKEN_OUT_CHANNEL_ID", "HONEYPOT_CHANNEL_ID", "SUGGESTION_PING_ROLE_ID", "AUTHORIZED_USER_ID",
         "RANDOM_MESSAGE_CHANCE", "CHICKEN_OUT_TIMEOUT", "LLM_MAX_TOKENS", "LLM_TIMEOUT",
         "LLM_PERCENTAGE_VALUE", "LLM_MEMORY_SIZE", "LLM_CONTEXT_MESSAGES",
@@ -359,7 +367,7 @@ def load_config() -> dict:
     }
     boolean_keys = {
         "ENABLE_RANDOM_MESSAGES", "ENABLE_MENTION_RESPONSES", "ENABLE_AUTO_THREAD",
-        "ENABLE_CHICKEN_OUT", "ENABLE_HONEYPOT", "ENABLE_SUGGESTIONS", "ENABLE_RAPE_COMMAND",
+        "ENABLE_CHICKEN_OUT", "ENABLE_HONEYPOT", "ENABLE_SUGGESTIONS",
         "ENABLE_LLM", "LLM_FALLBACK_ON_ERROR", "LLM_TYPING_INDICATOR",
         "LLM_PERCENTAGE", "ENABLE_LOGGING", "ENABLE_SHITPOST", "ENABLE_BIRTHDAYS",
         "ENABLE_ATTENTION_WINDOW", "ENABLE_LLM_VISION",
@@ -3461,24 +3469,6 @@ async def suggest_message_ctx(interaction: discord.Interaction, message: discord
     await post_suggestion(interaction, message.content, message.author, message.jump_url)
 
 
-# ── GUILD-ONLY: visible only in the configured guild ─────────────────────
-@bot.tree.context_menu(name="Rape member", guild=_GUILD)
-async def rape_member_ctx(interaction: discord.Interaction, member: discord.Member):
-    if not cfg["ENABLE_RAPE_COMMAND"]:
-        await interaction.response.send_message("❌ This command is disabled.", ephemeral=True)
-        return
-    channel = bot.get_channel(cfg["RAPE_CHANNEL_ID"])
-    if not channel:
-        await interaction.response.send_message("❌ Target channel not found.", ephemeral=True)
-        return
-    try:
-        await channel.send(f"{interaction.user.mention} raped {member.mention}")
-        await interaction.response.send_message(f"✅ Done.", ephemeral=True)
-    except Exception as e:
-        print(f"❌ Rape command error: {e}")
-        await interaction.response.send_message("❌ Error sending message.", ephemeral=True)
-
-
 # ============================================================
 # ENTRY POINT
 # ============================================================
@@ -3497,7 +3487,6 @@ if __name__ == "__main__":
     print(f"   Chicken out          : {'✅' if cfg['ENABLE_CHICKEN_OUT'] else '❌'}")
     print(f"   Honeypot             : {'✅ ch ' + str(cfg['HONEYPOT_CHANNEL_ID']) if cfg['ENABLE_HONEYPOT'] and cfg['HONEYPOT_CHANNEL_ID'] else ('⚠️  enabled but HONEYPOT_CHANNEL_ID not set' if cfg['ENABLE_HONEYPOT'] else '❌')}")
     print(f"   Suggestions          : {'✅' if cfg['ENABLE_SUGGESTIONS'] else '❌'}")
-    print(f"   Rape command         : {'✅' if cfg['ENABLE_RAPE_COMMAND'] else '❌'}")
     print(f"   Demotivator          : ✅ /demotivator enabled")
     print(f"   LLM                  : {'✅ ' + cfg['LLM_PROVIDER'].upper() + ' / ' + cfg['LLM_MODEL'] + (' ☁️' if cfg['LLM_PROVIDER'] == 'ollama_cloud' else '') if cfg['ENABLE_LLM'] else '❌ disabled'}")
     print(f"   Context messages     : last {cfg['LLM_CONTEXT_MESSAGES']} channel msgs per response")

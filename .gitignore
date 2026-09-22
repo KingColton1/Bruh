@@ -6,3 +6,4 @@ config.txt
 *.pyc
 birthday_data.json
 .idea/
+logs/
